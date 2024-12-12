@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-export default function CreateForm() {
+export default function ViewResponses() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -26,8 +26,8 @@ export default function CreateForm() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Create New Form</h1>
-      <p>Form creation functionality will be implemented here.</p>
+      <h1 className="text-2xl font-bold mb-4">View Responses</h1>
+      <p>Response viewing functionality will be implemented here.</p>
       <Button onClick={() => router.push("/dashboard")} className="mt-4">
         Back to Dashboard
       </Button>

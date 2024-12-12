@@ -41,7 +41,8 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push("/");
+        localStorage.setItem("token", data.token); // Store the token
+        router.push("/dashboard");
       } else {
         setError(data.message || "Login failed");
       }
@@ -103,7 +104,7 @@ export default function Login() {
         </CardContent>
         <CardFooter>
           <p className="text-sm text-center w-full text-muted-foreground">
-            Don not have an account?{" "}
+            Don't have an account?{" "}
             <Link href="/register" className="text-primary hover:underline">
               Register
             </Link>
