@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function ViewResponses({}: { params: { id: string } }) {
+export default function ViewResponses({ params }: { params: { id: string } }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
 

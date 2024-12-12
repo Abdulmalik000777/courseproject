@@ -67,9 +67,7 @@ export default function FormDisplay({
           {question.type === "radio" && (
             <RadioGroup
               value={(responses[index] as string) || ""}
-              onValueChange={(value: string | string[]) =>
-                handleInputChange(index, value)
-              }
+              onValueChange={(value) => handleInputChange(index, value)}
             >
               {question.options?.map((option, optionIndex) => (
                 <div key={optionIndex} className="flex items-center space-x-2">
@@ -96,7 +94,7 @@ export default function FormDisplay({
                     checked={((responses[index] as string[]) || []).includes(
                       option
                     )}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       const currentResponses =
                         (responses[index] as string[]) || [];
                       const newResponses = checked
