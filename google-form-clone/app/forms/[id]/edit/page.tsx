@@ -32,20 +32,18 @@ interface Form {
   questions: Question[];
 }
 
-const defaultForm: Form = {
-  id: 0,
-  title: "",
-  description: "",
-  questions: [],
-};
-
 export default function EditForm({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(params);
-  const [form, setForm] = useState<Form>(defaultForm);
+  const [form, setForm] = useState<Form>({
+    id: 0,
+    title: "",
+    description: "",
+    questions: [],
+  });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -67,7 +65,9 @@ export default function EditForm({
 
         if (response.ok) {
           const data = await response.json();
-          setForm(data.form);
+          if (data.form) {
+            setForm(data.form);
+          }
         } else {
           setError("Failed to fetch form");
         }
@@ -83,32 +83,34 @@ export default function EditForm({
   }, [resolvedParams.id, router]);
 
   const addQuestion = () => {
-    setForm((prevForm) => ({
-      ...prevForm,
-      questions: [
-        ...prevForm.questions,
-        { type: "text", question: "", order: prevForm.questions.length },
-      ],
-    }));
+    if (form) {
+      setForm({
+        ...form,
+        questions: [
+          ...form.questions,
+          { type: "text", question: "", order: form.questions.length },
+        ],
+      });
+    }
   };
 
   const updateQuestion = (index: number, field: string, value: string) => {
-    setForm((prevForm) => {
-      const updatedQuestions = [...prevForm.questions];
+    if (form) {
+      const updatedQuestions = [...form.questions];
       updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
-      return { ...prevForm, questions: updatedQuestions };
-    });
+      setForm({ ...form, questions: updatedQuestions });
+    }
   };
 
   const addOption = (questionIndex: number) => {
-    setForm((prevForm) => {
-      const updatedQuestions = [...prevForm.questions];
+    if (form) {
+      const updatedQuestions = [...form.questions];
       if (!updatedQuestions[questionIndex].options) {
         updatedQuestions[questionIndex].options = [];
       }
       updatedQuestions[questionIndex].options?.push("");
-      return { ...prevForm, questions: updatedQuestions };
-    });
+      setForm({ ...form, questions: updatedQuestions });
+    }
   };
 
   const updateOption = (
@@ -116,25 +118,26 @@ export default function EditForm({
     optionIndex: number,
     value: string
   ) => {
-    setForm((prevForm) => {
-      const updatedQuestions = [...prevForm.questions];
+    if (form) {
+      const updatedQuestions = [...form.questions];
       if (updatedQuestions[questionIndex].options) {
         updatedQuestions[questionIndex].options![optionIndex] = value;
+        setForm({ ...form, questions: updatedQuestions });
       }
-      return { ...prevForm, questions: updatedQuestions };
-    });
+    }
   };
 
   const removeQuestion = (index: number) => {
-    setForm((prevForm) => ({
-      ...prevForm,
-      questions: prevForm.questions.filter((_, i) => i !== index),
-    }));
+    if (form) {
+      const updatedQuestions = form.questions.filter((_, i) => i !== index);
+      setForm({ ...form, questions: updatedQuestions });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!form) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -168,6 +171,10 @@ export default function EditForm({
     return <div>Loading...</div>;
   }
 
+  if (!form) {
+    return <div>Form not found</div>;
+  }
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Edit Form</h1>
@@ -181,7 +188,7 @@ export default function EditForm({
           <Label htmlFor="title">Form Title</Label>
           <Input
             id="title"
-            value={form.title}
+            value={form.title || ""}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
@@ -190,7 +197,7 @@ export default function EditForm({
           <Label htmlFor="description">Form Description</Label>
           <Textarea
             id="description"
-            value={form.description}
+            value={form.description || ""}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
         </div>
@@ -209,7 +216,7 @@ export default function EditForm({
             </div>
             <Input
               id={`question-${index}`}
-              value={question.question}
+              value={question.question || ""}
               onChange={(e) =>
                 updateQuestion(index, "question", e.target.value)
               }
@@ -238,7 +245,7 @@ export default function EditForm({
                 {question.options?.map((option, optionIndex) => (
                   <Input
                     key={optionIndex}
-                    value={option}
+                    value={option || ""}
                     onChange={(e) =>
                       updateOption(index, optionIndex, e.target.value)
                     }
