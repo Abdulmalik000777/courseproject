@@ -1,7 +1,6 @@
 "use client";
 
-import { use } from "react";
-import { useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 
 interface Question {
   id: number;
@@ -38,41 +38,39 @@ export default function ViewForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchForm = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setError("You are not authenticated. Please log in.");
-          return;
-        }
+  const fetchForm = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
 
-        const response = await fetch(`/api/forms/${resolvedParams.id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setForm(data.form);
-        } else if (response.status === 401) {
-          setError("You are not authorized to view this form. Please log in.");
-          router.push("/login");
-        } else {
-          setError("Failed to fetch form");
-        }
-      } catch (error) {
-        console.error("Error fetching form:", error);
-        setError("An unexpected error occurred");
-      } finally {
-        setIsLoading(false);
+    try {
+      const response = await fetch(`/api/forms/${resolvedParams.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setForm(data.form);
+      } else {
+        setError("Failed to fetch form");
       }
-    };
-
-    fetchForm();
+    } catch (error) {
+      console.error("Error fetching form:", error);
+      setError("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
+    }
   }, [resolvedParams.id, router]);
+
+  useEffect(() => {
+    fetchForm();
+  }, [fetchForm]);
 
   const handleInputChange = (questionId: number, value: string | string[]) => {
     setResponses((prev) => ({ ...prev, [questionId]: value }));
@@ -83,13 +81,14 @@ export default function ViewForm({
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setError("You are not authenticated. Please log in.");
-        return;
-      }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("You are not authenticated. Please log in.");
+      setIsSubmitting(false);
+      return;
+    }
 
+    try {
       const response = await fetch(`/api/forms/${resolvedParams.id}/submit`, {
         method: "POST",
         headers: {
@@ -100,7 +99,10 @@ export default function ViewForm({
       });
 
       if (response.ok) {
-        router.push(`/forms/${resolvedParams.id}/thank-you`);
+        setSubmitSuccess(true);
+        setTimeout(() => {
+          router.push(`/forms/${resolvedParams.id}/thank-you`);
+        }, 2000);
       } else {
         const errorData = await response.json();
         setError(errorData.message || "Failed to submit form");
@@ -114,23 +116,37 @@ export default function ViewForm({
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   if (!form) {
-    return <div>Form not found</div>;
+    return <div className="text-center text-red-500">Form not found</div>;
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">{form.title}</h1>
-      <p className="mb-6">{form.description}</p>
+    <div className="container mx-auto p-4 bg-gray-800 min-h-screen">
+      <h1 className="text-2xl font-bold mb-4 text-white">{form.title}</h1>
+      <p className="mb-6 text-gray-300">{form.description}</p>
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {submitSuccess && (
+        <Alert className="mb-4">
+          <AlertDescription>
+            Form submitted successfully! Redirecting...
+          </AlertDescription>
+        </Alert>
+      )}
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 bg-white p-6 rounded-lg shadow-md"
+      >
         {form.questions.map((question) => (
           <div key={question.id} className="space-y-2">
             <Label htmlFor={`question-${question.id}`}>
@@ -200,7 +216,14 @@ export default function ViewForm({
           </div>
         ))}
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Submitting..." : "Submit"}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            "Submit"
+          )}
         </Button>
       </form>
     </div>

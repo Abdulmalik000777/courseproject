@@ -13,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import { PlusIcon, TrashIcon, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Question {
   type: "text" | "textarea" | "radio" | "checkbox";
@@ -29,6 +30,7 @@ export default function CreateForm() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -82,10 +84,43 @@ export default function CreateForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
+
+    if (!title.trim()) {
+      setError("Form title is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (questions.length === 0) {
+      setError("At least one question is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    for (const question of questions) {
+      if (!question.question.trim()) {
+        setError("All questions must have content");
+        setIsSubmitting(false);
+        return;
+      }
+      if (
+        (question.type === "radio" || question.type === "checkbox") &&
+        (!question.options || question.options.length < 2)
+      ) {
+        setError(
+          "Multiple choice and checkbox questions must have at least two options"
+        );
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
         setError("You are not authenticated. Please log in.");
+        setIsSubmitting(false);
         return;
       }
 
@@ -99,37 +134,25 @@ export default function CreateForm() {
       });
 
       if (response.ok) {
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-          console.log("Form created successfully:", data);
-          router.push("/dashboard");
-        } catch {
-          console.error("Failed to parse JSON:", responseText);
-          setError("Received invalid response from server");
-        }
+        router.push("/dashboard");
       } else {
-        const errorText = await response.text();
-        console.error("Server error response:", errorText);
-        let errorMessage;
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || "Failed to create form";
-        } catch {
-          errorMessage =
-            "Failed to create form. Server response was not valid JSON.";
-        }
-        setError(errorMessage);
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to create form");
       }
     } catch (error) {
       console.error("Error creating form:", error);
       setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -141,86 +164,95 @@ export default function CreateForm() {
         </Alert>
       )}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="title">Form Title</Label>
-          <Input
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="description">Form Description</Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-        {questions.map((question, index) => (
-          <div key={index} className="border p-4 rounded-md">
-            <div className="flex justify-between items-center mb-2">
-              <Label htmlFor={`question-${index}`}>Question {index + 1}</Label>
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                onClick={() => removeQuestion(index)}
-              >
-                <TrashIcon className="h-4 w-4" />
-              </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle>Form Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="title">Form Title</Label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
             </div>
-            <Input
-              id={`question-${index}`}
-              value={question.question}
-              onChange={(e) =>
-                updateQuestion(index, "question", e.target.value)
-              }
-              className="mb-2"
-              required
-            />
-            <Select
-              value={question.type}
-              onValueChange={(value) =>
-                updateQuestion(index, "type", value as Question["type"])
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select question type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">Short Answer</SelectItem>
-                <SelectItem value="textarea">Long Answer</SelectItem>
-                <SelectItem value="radio">Multiple Choice</SelectItem>
-                <SelectItem value="checkbox">Checkboxes</SelectItem>
-              </SelectContent>
-            </Select>
-            {(question.type === "radio" || question.type === "checkbox") && (
-              <div className="mt-2">
-                <Label>Options</Label>
-                {question.options?.map((option, optionIndex) => (
-                  <Input
-                    key={optionIndex}
-                    value={option}
-                    onChange={(e) =>
-                      updateOption(index, optionIndex, e.target.value)
-                    }
-                    className="mt-1"
-                    placeholder={`Option ${optionIndex + 1}`}
-                    required
-                  />
-                ))}
+            <div>
+              <Label htmlFor="description">Form Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        {questions.map((question, index) => (
+          <Card key={index}>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                Question {index + 1}
                 <Button
                   type="button"
-                  onClick={() => addOption(index)}
-                  className="mt-2"
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => removeQuestion(index)}
                 >
-                  Add Option
+                  <TrashIcon className="h-4 w-4" />
                 </Button>
-              </div>
-            )}
-          </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                value={question.question}
+                onChange={(e) =>
+                  updateQuestion(index, "question", e.target.value)
+                }
+                placeholder="Enter your question"
+                required
+              />
+              <Select
+                value={question.type}
+                onValueChange={(value) =>
+                  updateQuestion(index, "type", value as Question["type"])
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select question type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Short Answer</SelectItem>
+                  <SelectItem value="textarea">Long Answer</SelectItem>
+                  <SelectItem value="radio">Multiple Choice</SelectItem>
+                  <SelectItem value="checkbox">Checkboxes</SelectItem>
+                </SelectContent>
+              </Select>
+              {(question.type === "radio" || question.type === "checkbox") && (
+                <div className="space-y-2">
+                  <Label>Options</Label>
+                  {question.options?.map((option, optionIndex) => (
+                    <Input
+                      key={optionIndex}
+                      value={option}
+                      onChange={(e) =>
+                        updateOption(index, optionIndex, e.target.value)
+                      }
+                      placeholder={`Option ${optionIndex + 1}`}
+                      required
+                    />
+                  ))}
+                  <Button
+                    type="button"
+                    onClick={() => addOption(index)}
+                    className="mt-2"
+                  >
+                    Add Option
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
         <Button type="button" onClick={addQuestion} className="w-full">
           <PlusIcon className="mr-2 h-4 w-4" /> Add Question
@@ -233,7 +265,16 @@ export default function CreateForm() {
           >
             Cancel
           </Button>
-          <Button type="submit">Create Form</Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create Form"
+            )}
+          </Button>
         </div>
       </form>
     </div>

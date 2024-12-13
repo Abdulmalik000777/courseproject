@@ -19,7 +19,7 @@ export async function GET(
     }
 
     // TODO: Get the actual user ID from the token
-    const userId = 1; // Placeholder user ID
+    //const userId = 1 // Placeholder user ID - Removed as userId is not used in GET
 
     const formId = resolvedParams.id;
 
@@ -94,7 +94,9 @@ export async function PUT(
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    // TODO: Get the actual user ID from the token
     const userId = 1; // Placeholder user ID
+
     const formId = resolvedParams.id;
     const { title, description, questions } = await req.json();
 
@@ -185,7 +187,9 @@ export async function DELETE(
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    // TODO: Get the actual user ID from the token
     const userId = 1; // Placeholder user ID
+
     const formId = resolvedParams.id;
 
     const connection = await pool.getConnection();

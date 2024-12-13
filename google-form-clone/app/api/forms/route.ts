@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { RowDataPacket, OkPacket } from "mysql2";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
+  console.log("GET request to /api/forms");
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -10,48 +11,83 @@ export async function GET(req: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    // TODO: Implement proper token verification
-    // For now, we'll just check if the token exists
     if (!token) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // TODO: Get the actual user ID from the token
+    // TODO: Implement proper token verification and get the actual user ID
     const userId = 1; // Placeholder user ID
 
-    const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT f.id, f.title, f.description, f.created_at, 
-          COUNT(DISTINCT fs.id) as responseCount
-       FROM forms f
-       LEFT JOIN form_submissions fs ON f.id = fs.form_id
-       WHERE f.user_id = ?
-       GROUP BY f.id
-       ORDER BY f.created_at DESC`,
-      [userId]
-    );
+    const url = new URL(req.url);
+    const formId = url.searchParams.get("id");
 
-    return NextResponse.json(
-      {
-        forms: rows.map((row) => ({
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          created_at: row.created_at,
-          responseCount: row.responseCount,
-        })),
-      },
-      { status: 200 }
-    );
+    const connection = await pool.getConnection();
+    try {
+      if (formId) {
+        // Fetch a specific form
+        const [formRows] = await connection.execute<RowDataPacket[]>(
+          "SELECT id, title, description FROM forms WHERE id = ? AND user_id = ?",
+          [formId, userId]
+        );
+
+        if (formRows.length === 0) {
+          return NextResponse.json(
+            { message: "Form not found" },
+            { status: 404 }
+          );
+        }
+
+        const form = formRows[0];
+
+        const [questionRows] = await connection.execute<RowDataPacket[]>(
+          "SELECT id, question_text, question_type, question_order FROM questions WHERE form_id = ? ORDER BY question_order",
+          [formId]
+        );
+
+        const questions = await Promise.all(
+          questionRows.map(async (question) => {
+            if (
+              question.question_type === "radio" ||
+              question.question_type === "checkbox"
+            ) {
+              const [optionRows] = await connection.execute<RowDataPacket[]>(
+                "SELECT option_text FROM options WHERE question_id = ? ORDER BY option_order",
+                [question.id]
+              );
+              return {
+                ...question,
+                options: optionRows.map((option) => option.option_text),
+              };
+            }
+            return question;
+          })
+        );
+
+        form.questions = questions;
+
+        return NextResponse.json({ form }, { status: 200 });
+      } else {
+        // Fetch all forms for the user
+        const [rows] = await connection.execute<RowDataPacket[]>(
+          "SELECT id, title, description, created_at FROM forms WHERE user_id = ? ORDER BY created_at DESC",
+          [userId]
+        );
+
+        return NextResponse.json({ forms: rows }, { status: 200 });
+      }
+    } finally {
+      connection.release();
+    }
   } catch (error) {
-    console.error("Error fetching forms:", error);
+    console.error("Unexpected error in /api/forms GET route:", error);
     return NextResponse.json(
-      { message: "Failed to fetch forms" },
+      { message: "An unexpected error occurred" },
       { status: 500 }
     );
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -59,7 +95,6 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    // TODO: Implement proper token verification
     if (!token) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
@@ -70,8 +105,7 @@ export async function POST(req: Request) {
     console.log("Received form data:", { title, description, questions });
 
     // TODO: Implement proper user identification from token
-    // For now, we'll use a placeholder user ID
-    const userId = 1;
+    const userId = 1; // Placeholder user ID
 
     const connection = await pool.getConnection();
 
