@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const [result] = await pool.execute<OkPacket>(
+    await pool.execute<OkPacket>(
       "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
       [name, email, hashedPassword]
     );

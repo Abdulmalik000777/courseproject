@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState } from "react";
@@ -75,7 +74,8 @@ export default function Register() {
       } else {
         setError(data.message || "Registration failed");
       }
-    } catch (error) {
+    } catch {
+      console.error("Registration error occurred");
       setError("An error occurred during registration");
     } finally {
       setIsLoading(false);

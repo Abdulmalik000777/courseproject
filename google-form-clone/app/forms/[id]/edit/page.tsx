@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,49 +18,97 @@ import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Question {
+  id?: number;
   type: "text" | "textarea" | "radio" | "checkbox";
   question: string;
   options?: string[];
   order?: number;
 }
 
-export default function CreateForm() {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [questions, setQuestions] = useState<Question[]>([]);
+interface Form {
+  id: number;
+  title: string;
+  description: string;
+  questions: Question[];
+}
+
+const defaultForm: Form = {
+  id: 0,
+  title: "",
+  description: "",
+  questions: [],
+};
+
+export default function EditForm({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const resolvedParams = use(params);
+  const [form, setForm] = useState<Form>(defaultForm);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-    } else {
-      setIsLoading(false);
-    }
-  }, [router]);
+    const fetchForm = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/forms/${resolvedParams.id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setForm(data.form);
+        } else {
+          setError("Failed to fetch form");
+        }
+      } catch (error) {
+        console.error("Error fetching form:", error);
+        setError("An unexpected error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchForm();
+  }, [resolvedParams.id, router]);
 
   const addQuestion = () => {
-    setQuestions([
-      ...questions,
-      { type: "text", question: "", order: questions.length },
-    ]);
+    setForm((prevForm) => ({
+      ...prevForm,
+      questions: [
+        ...prevForm.questions,
+        { type: "text", question: "", order: prevForm.questions.length },
+      ],
+    }));
   };
 
   const updateQuestion = (index: number, field: string, value: string) => {
-    const updatedQuestions = [...questions];
-    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
-    setQuestions(updatedQuestions);
+    setForm((prevForm) => {
+      const updatedQuestions = [...prevForm.questions];
+      updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
+      return { ...prevForm, questions: updatedQuestions };
+    });
   };
 
   const addOption = (questionIndex: number) => {
-    const updatedQuestions = [...questions];
-    if (!updatedQuestions[questionIndex].options) {
-      updatedQuestions[questionIndex].options = [];
-    }
-    updatedQuestions[questionIndex].options?.push("");
-    setQuestions(updatedQuestions);
+    setForm((prevForm) => {
+      const updatedQuestions = [...prevForm.questions];
+      if (!updatedQuestions[questionIndex].options) {
+        updatedQuestions[questionIndex].options = [];
+      }
+      updatedQuestions[questionIndex].options?.push("");
+      return { ...prevForm, questions: updatedQuestions };
+    });
   };
 
   const updateOption = (
@@ -67,21 +116,26 @@ export default function CreateForm() {
     optionIndex: number,
     value: string
   ) => {
-    const updatedQuestions = [...questions];
-    if (updatedQuestions[questionIndex].options) {
-      updatedQuestions[questionIndex].options![optionIndex] = value;
-      setQuestions(updatedQuestions);
-    }
+    setForm((prevForm) => {
+      const updatedQuestions = [...prevForm.questions];
+      if (updatedQuestions[questionIndex].options) {
+        updatedQuestions[questionIndex].options![optionIndex] = value;
+      }
+      return { ...prevForm, questions: updatedQuestions };
+    });
   };
 
   const removeQuestion = (index: number) => {
-    const updatedQuestions = questions.filter((_, i) => i !== index);
-    setQuestions(updatedQuestions);
+    setForm((prevForm) => ({
+      ...prevForm,
+      questions: prevForm.questions.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -89,41 +143,23 @@ export default function CreateForm() {
         return;
       }
 
-      const response = await fetch("/api/forms", {
-        method: "POST",
+      const response = await fetch(`/api/forms/${resolvedParams.id}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, description, questions }),
+        body: JSON.stringify(form),
       });
 
       if (response.ok) {
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-          console.log("Form created successfully:", data);
-          router.push("/dashboard");
-        } catch {
-          console.error("Failed to parse JSON:", responseText);
-          setError("Received invalid response from server");
-        }
+        router.push("/dashboard");
       } else {
-        const errorText = await response.text();
-        console.error("Server error response:", errorText);
-        let errorMessage;
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || "Failed to create form";
-        } catch {
-          errorMessage =
-            "Failed to create form. Server response was not valid JSON.";
-        }
-        setError(errorMessage);
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to update form");
       }
     } catch (error) {
-      console.error("Error creating form:", error);
+      console.error("Error updating form:", error);
       setError("An unexpected error occurred. Please try again.");
     }
   };
@@ -134,7 +170,7 @@ export default function CreateForm() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Create New Form</h1>
+      <h1 className="text-2xl font-bold mb-4">Edit Form</h1>
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>{error}</AlertDescription>
@@ -145,8 +181,8 @@ export default function CreateForm() {
           <Label htmlFor="title">Form Title</Label>
           <Input
             id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
             required
           />
         </div>
@@ -154,11 +190,11 @@ export default function CreateForm() {
           <Label htmlFor="description">Form Description</Label>
           <Textarea
             id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
         </div>
-        {questions.map((question, index) => (
+        {form.questions.map((question, index) => (
           <div key={index} className="border p-4 rounded-md">
             <div className="flex justify-between items-center mb-2">
               <Label htmlFor={`question-${index}`}>Question {index + 1}</Label>
@@ -233,7 +269,7 @@ export default function CreateForm() {
           >
             Cancel
           </Button>
-          <Button type="submit">Create Form</Button>
+          <Button type="submit">Update Form</Button>
         </div>
       </form>
     </div>
